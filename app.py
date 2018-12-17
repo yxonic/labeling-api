@@ -1,6 +1,7 @@
 __version__ = "0.0.1"
 
 import pymongo
+import math
 from util import *
 from flask import Flask, request
 
@@ -26,7 +27,7 @@ def get_schema(dataset):
     return schema
 
 
-@app.route('/<dataset>', methods=['POST'])
+@app.route('/<dataset>', methods=['PUT'])
 @api
 def update_schema(dataset):
     schema = request.json
@@ -39,17 +40,27 @@ def update_schema(dataset):
 @app.route('/<dataset>/page/<int:page>', methods=['GET'])
 @api
 def get_page(dataset, page):
-    return {"func": "get_page", "dataset": dataset, "page": page}
+    cursor = db[dataset].find().skip(50 * (page - 1)).limit(50)  # page conf
+    documents = [{k: v for k, v in doc.items() if k != '_id'}
+                 for doc in cursor]
+    return {"documents": documents,
+            "total": math.ceil(db[dataset].count() / 10)}
 
 
 @app.route('/<dataset>/<itemid>', methods=['GET'])
 @api
 def get_item(dataset, itemid):
-    return {"func": "get_item", "dataset": dataset, "item": itemid}
+    item = db[dataset].find_one({'id': itemid})
+    if not item:
+        raise KeyError('item not found')
+    del item['_id']
+    return item
 
 
-@app.route('/<dataset>/<itemid>', methods=['POST'])
+@app.route('/<dataset>/<itemid>', methods=['PUT'])
 @api
 def update_item(dataset, itemid):
-    return {"func": "update_item", "dataset": dataset, "item": itemid,
-            "content": request.json}
+    document = request.json
+    r = db[dataset].replace_one({'id': itemid}, dict(id=itemid, **document),
+                                upsert=True)
+    return {"acknowledged": r.acknowledged}
