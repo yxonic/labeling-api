@@ -4,8 +4,10 @@ import pymongo
 import math
 from util import *
 from flask import Flask, request
+from flask_cors import CORS
 
 app = Flask(__name__)
+cors = CORS(app, resources={"*": {"origins": "*"}})
 mongo = pymongo.MongoClient("mongodb://172.16.46.202:27017/",
                             serverSelectionTimeoutMS=1000)
 db = mongo.labeling
@@ -31,6 +33,8 @@ def get_schema(dataset):
 @api
 def update_schema(dataset):
     schema = request.json
+    schema['fields'] = \
+        [{'key': 'id', 'label': 'ID', 'type': 'text'}] + schema['fields']
     r = db.schemas.replace_one({"dataset": dataset},
                                dict(dataset=dataset, **schema),
                                upsert=True)
@@ -44,7 +48,7 @@ def get_page(dataset, page):
     documents = [{k: v for k, v in doc.items() if k != '_id'}
                  for doc in cursor]
     return {"documents": documents,
-            "total": math.ceil(db[dataset].count() / 10)}
+            "total": math.ceil(db[dataset].count() / 50)}
 
 
 @app.route('/<dataset>/<itemid>', methods=['GET'])
